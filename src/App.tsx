@@ -35,7 +35,7 @@ interface LogLine {
   type: 'system' | 'error' | 'success' | 'warning' | 'normal';
 }
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://realworld-backend-y89l.onrender.com';
 
 function App() {
   const scenarios: Scenario[] = [
