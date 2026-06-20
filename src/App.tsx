@@ -144,6 +144,7 @@ function App() {
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string>('');
+  const fetchedLogsRef = useRef<string>('');
   const activeScenario = scenarios.find(s => s.id === activeTab) || scenarios[0];
   const isLocalRunner = apiBase === LOCAL_API_BASE;
 
@@ -244,6 +245,29 @@ function App() {
 
         if (data.status === 'completed' || data.status === 'cancelled') {
           setIsRunning(false);
+
+          const logRunId = data.runId || currentRunId;
+          if (logRunId && fetchedLogsRef.current !== logRunId) {
+            fetchedLogsRef.current = logRunId;
+            try {
+              const logsResponse = await fetch(`${apiBase}/test-logs/${logRunId}`);
+              const logsData = await logsResponse.json();
+
+              if (!logsResponse.ok || logsData.success === false) {
+                throw new Error(logsData.message || `Log request failed with ${logsResponse.status}`);
+              }
+
+              setLogs(prev => [
+                ...prev,
+                {
+                  text: `\n[READABLE FAILURE SUMMARY]\n${logsData.summary}\n`,
+                  type: data.conclusion === 'success' ? 'success' : 'error',
+                },
+              ]);
+            } catch (err: any) {
+              setLogs(prev => [...prev, { text: `[LOG ERROR] ${err.message}\n`, type: 'warning' }]);
+            }
+          }
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -285,6 +309,7 @@ function App() {
     setWorkflowUrl(null);
     setArtifactLinks([]);
     lastStatusRef.current = '';
+    fetchedLogsRef.current = '';
 
     // Prepare config payload
     const payload = {
@@ -680,6 +705,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
