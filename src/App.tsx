@@ -38,7 +38,7 @@ interface LogLine {
 }
 
 const LOCAL_API_BASE = 'http://localhost:3000';
-const REMOTE_API_BASE = 'https://realworld-backend-y89l.onrender.com';
+const REMOTE_API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://realworld-backend-y89l.onrender.com';
 const DEFAULT_API_BASE = window.location.hostname === 'localhost' ? LOCAL_API_BASE : REMOTE_API_BASE;
 
 function App() {
@@ -218,6 +218,20 @@ function App() {
     };
 
     try {
+      const requestStartedAt = new Date().toISOString();
+      console.info('[E2E UI] Sending run-test request', {
+        apiBase,
+        flow: payload.flow,
+        requestStartedAt,
+      });
+      setLogs(prev => [
+        ...prev,
+        {
+          text: `[FRONTEND] ${requestStartedAt} POST ${apiBase}/run-test flow=${payload.flow}\n`,
+          type: 'system',
+        },
+      ]);
+
       const response = await fetch(`${apiBase}/run-test`, {
         method: 'POST',
         headers: {
@@ -227,12 +241,26 @@ function App() {
       });
 
       const resData = await response.json();
+      console.info('[E2E UI] run-test response received', {
+        status: response.status,
+        success: resData.success,
+        message: resData.message,
+      });
+      setLogs(prev => [
+        ...prev,
+        {
+          text: `[FRONTEND] Response ${response.status}: ${resData.message || JSON.stringify(resData)}\n`,
+          type: resData.success ? 'success' : 'error',
+        },
+      ]);
+
       if (!resData.success) {
         setLogs(prev => [...prev, { text: `[SYSTEM ERROR] ${resData.message}\n`, type: 'error' }]);
         setIsRunning(false);
         setStatusText('Error');
       }
     } catch (err: any) {
+      console.error('[E2E UI] Failed to call run-test', err);
       setLogs(prev => [...prev, { text: `[CONNECTION ERROR] Failed to reach E2E backend server: ${err.message}\n`, type: 'error' }]);
       setIsRunning(false);
       setStatusText('Offline');
