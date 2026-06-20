@@ -196,6 +196,44 @@ body {
   margin-top: 4px;
 }
 
+.runner-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.runner-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.runner-option.active {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.34);
+  color: #bfdbfe;
+}
+
+.runner-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* Grid Layout for Form & Terminal */
 .dashboard-grid {
   display: grid;

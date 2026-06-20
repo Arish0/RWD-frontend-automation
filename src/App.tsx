@@ -3,6 +3,7 @@ import {
   Play, 
   Square, 
   Monitor,
+  Server,
   Terminal as TerminalIcon, 
   Settings, 
   FileText, 
@@ -36,7 +37,9 @@ interface LogLine {
   type: 'system' | 'error' | 'success' | 'warning' | 'normal';
 }
 
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://realworld-backend-y89l.onrender.com';
+const LOCAL_API_BASE = 'http://localhost:3000';
+const REMOTE_API_BASE = 'https://realworld-backend-y89l.onrender.com';
+const DEFAULT_API_BASE = window.location.hostname === 'localhost' ? LOCAL_API_BASE : REMOTE_API_BASE;
 
 function App() {
   const scenarios: Scenario[] = [
@@ -107,6 +110,7 @@ function App() {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>('Ready');
+  const [apiBase, setApiBase] = useState<string>(() => localStorage.getItem('realworldApiBase') || DEFAULT_API_BASE);
   const [formData, setFormData] = useState<Record<string, any>>({
     borrowerEmail: 'brooklyn@yopmail.com',
     borrowerPassword: 'Test@1233333',
@@ -122,10 +126,20 @@ function App() {
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const activeScenario = scenarios.find(s => s.id === activeTab) || scenarios[0];
+  const isLocalRunner = apiBase === LOCAL_API_BASE;
+
+  const selectRunner = (nextApiBase: string) => {
+    if (isRunning) return;
+
+    localStorage.setItem('realworldApiBase', nextApiBase);
+    setApiBase(nextApiBase);
+    setLogs([]);
+    setStatusText('Ready');
+  };
 
   // SSE Logs subscription
   useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/stream-logs`);
+    const eventSource = new EventSource(`${apiBase}/stream-logs`);
 
     eventSource.onmessage = (event) => {
       try {
@@ -164,7 +178,7 @@ function App() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [apiBase]);
 
   // Scroll to bottom of terminal when logs are added
   useEffect(() => {
@@ -204,7 +218,7 @@ function App() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/run-test`, {
+      const response = await fetch(`${apiBase}/run-test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -228,7 +242,7 @@ function App() {
   // Stop running test scenario
   const handleStopTest = async () => {
     try {
-      const response = await fetch(`${API_BASE}/stop-test`, {
+      const response = await fetch(`${apiBase}/stop-test`, {
         method: 'POST'
       });
       const resData = await response.json();
@@ -241,7 +255,7 @@ function App() {
   };
 
   const handleOpenBrowser = () => {
-    window.open(`${API_BASE}/browser`, '_blank', 'noopener,noreferrer');
+    window.open(`${apiBase}/browser`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -271,7 +285,7 @@ function App() {
         <div className="sidebar-footer">
           <div className="server-status">
             <span className="status-dot"></span>
-            <span>Local headed runner connected</span>
+            <span>{isLocalRunner ? 'This computer runner' : 'Deployed server runner'}</span>
           </div>
         </div>
       </aside>
@@ -285,6 +299,26 @@ function App() {
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div className="runner-toggle" aria-label="Runner target">
+              <button
+                className={`runner-option ${isLocalRunner ? 'active' : ''}`}
+                onClick={() => selectRunner(LOCAL_API_BASE)}
+                disabled={isRunning}
+                title="Run tests on this computer and open a real local Chromium window"
+              >
+                <Monitor size={15} />
+                This computer
+              </button>
+              <button
+                className={`runner-option ${!isLocalRunner ? 'active' : ''}`}
+                onClick={() => selectRunner(REMOTE_API_BASE)}
+                disabled={isRunning}
+                title="Run tests on the deployed backend server"
+              >
+                <Server size={15} />
+                Server
+              </button>
+            </div>
             <span style={{ 
               fontSize: '13px', 
               fontWeight: 600, 
@@ -454,7 +488,7 @@ function App() {
                 onClick={handleOpenBrowser}
               >
                 <Monitor size={16} />
-                Open Live Chromium
+                {isLocalRunner ? 'Runner Browser' : 'Open Live Chromium'}
               </button>
 
               <button 
@@ -483,7 +517,9 @@ function App() {
             <div className="terminal-body">
               {logs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Console waiting for test execution... (Headed browser window will open on screen once started)
+                  {isLocalRunner
+                    ? 'Console waiting for test execution... Start backend locally, then Run Headed Test to open normal Chromium on this computer.'
+                    : 'Console waiting for test execution... Server runs cannot open a real browser window on your computer.'}
                 </div>
               ) : (
                 logs.map((log, idx) => (
