@@ -315,6 +315,26 @@ body {
   box-shadow: none;
 }
 
+.btn-secondary {
+  background: rgba(59, 130, 246, 0.14);
+  color: #bfdbfe;
+  border-color: rgba(59, 130, 246, 0.32);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.28);
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.28);
+}
+
+.btn-secondary:disabled {
+  background: rgba(59, 130, 246, 0.05);
+  color: rgba(191, 219, 254, 0.35);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
 .btn-danger {
   background: rgba(239, 68, 68, 0.15);
   color: var(--error);

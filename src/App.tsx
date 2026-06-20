@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Square, 
+  Monitor,
   Terminal as TerminalIcon, 
   Settings, 
   FileText, 
@@ -239,6 +240,10 @@ function App() {
     }
   };
 
+  const handleOpenBrowser = () => {
+    window.open(`${API_BASE}/browser`, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <>
       {/* Sidebar */}
@@ -442,6 +447,14 @@ function App() {
               >
                 <Play size={16} />
                 Run Headed Test
+              </button>
+
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleOpenBrowser}
+              >
+                <Monitor size={16} />
+                Open Live Chromium
               </button>
 
               <button 
