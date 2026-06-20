@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Square, 
@@ -35,6 +35,21 @@ interface Scenario {
 interface LogLine {
   text: string;
   type: 'system' | 'error' | 'success' | 'warning' | 'normal';
+}
+
+interface TestRunStatus {
+  runId?: string;
+  workflowRunId?: number | null;
+  status?: string;
+  conclusion?: string | null;
+  htmlUrl?: string;
+  logsUrl?: string;
+  artifacts?: Array<{
+    id: number;
+    name: string;
+    archiveDownloadUrl: string;
+  }>;
+  message?: string;
 }
 
 const LOCAL_API_BASE = 'http://localhost:3000';
@@ -110,6 +125,9 @@ function App() {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>('Ready');
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [workflowUrl, setWorkflowUrl] = useState<string | null>(null);
+  const [artifactLinks, setArtifactLinks] = useState<TestRunStatus['artifacts']>([]);
   const [apiBase, setApiBase] = useState<string>(() => localStorage.getItem('realworldApiBase') || DEFAULT_API_BASE);
   const [formData, setFormData] = useState<Record<string, any>>({
     borrowerEmail: 'brooklyn@yopmail.com',
@@ -125,6 +143,7 @@ function App() {
   });
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
+  const lastStatusRef = useRef<string>('');
   const activeScenario = scenarios.find(s => s.id === activeTab) || scenarios[0];
   const isLocalRunner = apiBase === LOCAL_API_BASE;
 
@@ -180,6 +199,67 @@ function App() {
     };
   }, [apiBase]);
 
+
+  useEffect(() => {
+    if (!currentRunId || !isRunning) return;
+
+    let cancelled = false;
+
+    const formatStatus = (data: TestRunStatus) => {
+      if (data.status === 'completed') {
+        return data.conclusion === 'success' ? 'Passed' : 'Failed';
+      }
+      if (data.status === 'in_progress') return 'Running';
+      if (data.status === 'queued') return 'Queued';
+      return data.status || 'Running';
+    };
+
+    const pollStatus = async () => {
+      try {
+        const response = await fetch(`${apiBase}/test-status/${currentRunId}`);
+        const data: TestRunStatus & { success?: boolean } = await response.json();
+
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || `Status request failed with ${response.status}`);
+        }
+
+        if (cancelled) return;
+
+        const displayStatus = formatStatus(data);
+        setStatusText(displayStatus);
+        if (data.htmlUrl) setWorkflowUrl(data.htmlUrl);
+        if (data.artifacts) setArtifactLinks(data.artifacts);
+
+        const statusKey = `${data.status}:${data.conclusion || ''}:${data.workflowRunId || data.runId || ''}`;
+        if (lastStatusRef.current !== statusKey) {
+          lastStatusRef.current = statusKey;
+          setLogs(prev => [
+            ...prev,
+            {
+              text: `[GITHUB] Run ${data.workflowRunId || data.runId} status=${data.status}${data.conclusion ? ` conclusion=${data.conclusion}` : ''}\n`,
+              type: data.status === 'completed' ? (data.conclusion === 'success' ? 'success' : 'error') : 'system',
+            },
+          ]);
+        }
+
+        if (data.status === 'completed' || data.status === 'cancelled') {
+          setIsRunning(false);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        setLogs(prev => [...prev, { text: `[STATUS ERROR] ${err.message}\n`, type: 'error' }]);
+      }
+    };
+
+    pollStatus();
+    const interval = window.setInterval(pollStatus, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [apiBase, currentRunId, isRunning]);
+
   // Scroll to bottom of terminal when logs are added
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -200,7 +280,11 @@ function App() {
 
     setLogs([]);
     setIsRunning(true);
-    setStatusText('Initiating');
+    setStatusText('Dispatching');
+    setCurrentRunId(null);
+    setWorkflowUrl(null);
+    setArtifactLinks([]);
+    lastStatusRef.current = '';
 
     // Prepare config payload
     const payload = {
@@ -241,10 +325,12 @@ function App() {
       });
 
       const resData = await response.json();
-      console.info('[E2E UI] run-test response received', {
+      console.info('[E2E UI] GitHub workflow dispatch response received', {
         status: response.status,
         success: resData.success,
         message: resData.message,
+        runId: resData.runId,
+        workflowRunId: resData.workflowRunId,
       });
       setLogs(prev => [
         ...prev,
@@ -258,7 +344,21 @@ function App() {
         setLogs(prev => [...prev, { text: `[SYSTEM ERROR] ${resData.message}\n`, type: 'error' }]);
         setIsRunning(false);
         setStatusText('Error');
+        return;
       }
+
+      const runId = resData.runId || resData.trackingId;
+      setCurrentRunId(runId);
+      setWorkflowUrl(resData.htmlUrl || null);
+      setArtifactLinks(resData.artifacts || []);
+      setStatusText(resData.status === 'in_progress' ? 'Running' : 'Queued');
+      setLogs(prev => [
+        ...prev,
+        {
+          text: `[GITHUB] Workflow dispatched. runId=${runId}${resData.workflowRunId ? ` workflowRunId=${resData.workflowRunId}` : ''}\n`,
+          type: 'system',
+        },
+      ]);
     } catch (err: any) {
       console.error('[E2E UI] Failed to call run-test', err);
       setLogs(prev => [...prev, { text: `[CONNECTION ERROR] Failed to reach E2E backend server: ${err.message}\n`, type: 'error' }]);
@@ -283,6 +383,10 @@ function App() {
   };
 
   const handleOpenBrowser = () => {
+    if (workflowUrl) {
+      window.open(workflowUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     window.open(`${apiBase}/browser`, '_blank', 'noopener,noreferrer');
   };
 
@@ -313,7 +417,7 @@ function App() {
         <div className="sidebar-footer">
           <div className="server-status">
             <span className="status-dot"></span>
-            <span>{isLocalRunner ? 'This computer runner' : 'Deployed server runner'}</span>
+            <span>{isLocalRunner ? 'Local API' : 'GitHub Actions runner'}</span>
           </div>
         </div>
       </aside>
@@ -332,19 +436,19 @@ function App() {
                 className={`runner-option ${isLocalRunner ? 'active' : ''}`}
                 onClick={() => selectRunner(LOCAL_API_BASE)}
                 disabled={isRunning}
-                title="Run tests on this computer and open a real local Chromium window"
+                title="Use a local backend API for dispatch testing"
               >
                 <Monitor size={15} />
-                This computer
+                Local API
               </button>
               <button
                 className={`runner-option ${!isLocalRunner ? 'active' : ''}`}
                 onClick={() => selectRunner(REMOTE_API_BASE)}
                 disabled={isRunning}
-                title="Run tests on the deployed backend server"
+                title="Use the deployed backend API to dispatch GitHub Actions"
               >
                 <Server size={15} />
-                Server
+                GitHub
               </button>
             </div>
             <span style={{ 
@@ -508,7 +612,7 @@ function App() {
                 disabled={isRunning}
               >
                 <Play size={16} />
-                Run Headed Test
+                Run Test
               </button>
 
               <button 
@@ -516,7 +620,7 @@ function App() {
                 onClick={handleOpenBrowser}
               >
                 <Monitor size={16} />
-                {isLocalRunner ? 'Runner Browser' : 'Open Live Chromium'}
+                {workflowUrl ? 'Open Workflow' : 'Runner Info'}
               </button>
 
               <button 
@@ -538,7 +642,7 @@ function App() {
                 <span className="terminal-dot dot-yellow"></span>
                 <span className="terminal-dot dot-green"></span>
               </div>
-              <div className="terminal-title">headed-playwright-runner.log</div>
+              <div className="terminal-title">github-actions-runner.log</div>
               <TerminalIcon size={14} className="text-muted" />
             </div>
 
@@ -546,8 +650,8 @@ function App() {
               {logs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
                   {isLocalRunner
-                    ? 'Console waiting for test execution... Start backend locally, then Run Headed Test to open normal Chromium on this computer.'
-                    : 'Console waiting for test execution... Server runs cannot open a real browser window on your computer.'}
+                    ? 'Console waiting for GitHub Actions dispatch through the local backend API.'
+                    : 'Console waiting for GitHub Actions dispatch. Status will update here.'}
                 </div>
               ) : (
                 logs.map((log, idx) => (
@@ -556,6 +660,16 @@ function App() {
                   </div>
                 ))
               )}
+              {workflowUrl && (
+                <div className="log-line log-system">
+                  Workflow: {workflowUrl}
+                </div>
+              )}
+              {artifactLinks?.map(artifact => (
+                <div key={artifact.id} className="log-line log-success">
+                  Artifact: {artifact.name} - {artifact.archiveDownloadUrl}
+                </div>
+              ))}
               <div ref={terminalEndRef} />
             </div>
           </div>
@@ -566,3 +680,7 @@ function App() {
 }
 
 export default App;
+
+
+
+
