@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Square, 
@@ -29,6 +29,7 @@ interface Scenario {
     aprMax?: number;
     duration?: number | string;
     iterations?: number;
+    nftId?: string;
   };
 }
 
@@ -114,9 +115,14 @@ function App() {
       icon: <RotateCcw className="nav-item-icon" size={20} />,
       defaultConfig: {
         borrowerEmail: 'brooklyn@yopmail.com',
-        borrowerPassword: 'Test@1233333',
-        lenderEmail: 'harish@yopmail.com',
-        lenderPassword: 'Test@1233333'
+        borrowerPassword: 'Test@1233333',        lenderEmail: 'harish@yopmail.com',
+        lenderPassword: 'Test@1233333',
+        loanAmountMin: 1000,
+        loanAmountMax: 5000,
+        aprMin: 10,
+        aprMax: 20,
+        duration: 90,
+        nftId: ''
       }
     }
   ];
@@ -139,7 +145,8 @@ function App() {
     aprMin: 10,
     aprMax: 20,
     duration: 90,
-    iterations: 10
+    iterations: 10,
+    nftId: ''
   });
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
@@ -323,7 +330,8 @@ function App() {
       aprMin: Number(formData.aprMin),
       aprMax: Number(formData.aprMax),
       duration: activeScenario.flow === 'counterRecounter' ? undefined : Number(formData.duration),
-      iterations: activeScenario.flow === 'counterRecounter' ? Number(formData.iterations) : undefined
+      iterations: activeScenario.flow === 'counterRecounter' ? Number(formData.iterations) : undefined,
+      nftId: activeScenario.flow === 'repayment' ? String(formData.nftId || '').trim() : undefined
     };
 
     try {
@@ -564,7 +572,22 @@ function App() {
               </div>
             )}
 
-            {activeScenario.flow !== 'counterRecounter' && activeScenario.flow !== 'repayment' && (
+            {activeScenario.flow === 'repayment' && (
+              <div className="form-group">
+                <label className="form-label">NFT Contract / Token ID</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  name="nftId"
+                  placeholder="0x1c71388e4f5089926fF153F7635F81C4F1676fCb/6"
+                  value={formData.nftId}
+                  onChange={handleInputChange}
+                  disabled={isRunning}
+                />
+              </div>
+            )}
+
+            {activeScenario.flow !== 'counterRecounter' && (
               <>
                 <div className="form-row">
                   <div className="form-group">
@@ -705,6 +728,10 @@ function App() {
 }
 
 export default App;
+
+
+
+
 
 
 
