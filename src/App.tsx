@@ -376,7 +376,7 @@ function App() {
   // Scroll to bottom of terminal when logs are added
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+  }, [logs, executionLogs]);
 
   // Handle form input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
