@@ -272,6 +272,8 @@ function App() {
         step3 = 'completed';
       } else if (isErr) {
         step3 = 'failed';
+      } else if (hasStartPlaywright) {
+        step3 = 'running';
       } else {
         step3 = 'running';
       }
