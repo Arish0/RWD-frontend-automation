@@ -434,9 +434,7 @@ body {
 
 .terminal-body {
   background: #05020a;
-  border: 1px solid var(--border-glass);
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
+  border: none;
   padding: 20px;
   flex-grow: 1;
   overflow-y: auto;
@@ -444,6 +442,209 @@ body {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* Terminal column layout grouping status tracker above console logs */
+.terminal-column {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.terminal-column .live-tracker-card {
+  grid-column: auto;
+  margin-bottom: 0;
+}
+
+/* Terminal layout content (split view: runner steps + logs) */
+.terminal-layout-content {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex-grow: 1;
+  background: #05020a;
+  border: 1px solid var(--border-glass);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  overflow: hidden;
+  height: calc(100% - 41px);
+}
+
+/* Stepper steps left panel */
+.console-stepper-panel {
+  background: rgba(12, 6, 22, 0.6);
+  border-right: 1px solid var(--border-glass);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stepper-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 10px;
+}
+
+.stepper-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.console-steps-list {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.console-step-item {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 20px;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.console-step-item:last-child {
+  padding-bottom: 0;
+}
+
+.console-step-item:hover {
+  transform: translateX(4px);
+}
+
+.console-step-circle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.console-step-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  font-weight: bold;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.console-step-line {
+  position: absolute;
+  top: 26px;
+  bottom: -20px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  z-index: 1;
+  transition: background 0.4s ease;
+}
+
+.console-step-line.line-completed {
+  background: var(--success);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+.console-step-line.line-running {
+  background: linear-gradient(to bottom, var(--success), var(--primary));
+}
+
+/* Console Step States */
+.console-step-item.step-pending .console-step-circle {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+}
+.console-step-item.step-pending .pending-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.console-step-item.step-running .console-step-circle {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1.5px solid var(--primary);
+  color: var(--primary-hover);
+  box-shadow: 0 0 12px var(--primary-glow);
+  animation: pulse-border 2s infinite;
+}
+
+.console-step-item.step-completed .console-step-circle {
+  background: var(--success);
+  border: 1.5px solid var(--success);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+.console-step-item.step-failed .console-step-circle {
+  background: var(--error);
+  border: 1.5px solid var(--error);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+}
+
+.console-step-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+}
+
+.console-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+.console-step-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.console-step-item.step-running .console-step-label {
+  color: var(--primary-hover);
+  text-shadow: 0 0 6px rgba(167, 139, 250, 0.25);
+  font-weight: 600;
+}
+
+.console-step-item.step-completed .console-step-label {
+  color: #ffffff;
+}
+
+.console-step-item.step-failed .console-step-label {
+  color: var(--error);
+}
+
+/* Mobile responsive split logs panel layout */
+@media (max-width: 992px) {
+  .terminal-layout-content {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .console-stepper-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-glass);
+    max-height: 240px;
+  }
+  .terminal-body {
+    max-height: 350px;
+  }
+}
+
 
 .log-line {
   white-space: pre-wrap;

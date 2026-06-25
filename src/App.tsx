@@ -9,7 +9,10 @@ import {
   FileText, 
   Layers, 
   ArrowRightLeft, 
-  RotateCcw
+  RotateCcw,
+  Check,
+  X,
+  Loader2
 } from 'lucide-react';
 
 interface Scenario {
@@ -115,15 +118,8 @@ function App() {
       icon: <RotateCcw className="nav-item-icon" size={20} />,
       defaultConfig: {
         borrowerEmail: 'brooklyn@yopmail.com',
-        borrowerPassword: 'Test@1233333',        lenderEmail: 'harish@yopmail.com',
-        lenderPassword: 'Test@1233333',
-        loanAmountMin: 1000,
-        loanAmountMax: 5000,
-        aprMin: 10,
-        aprMax: 20,
-        duration: 90,
-        nftId: ''
-        borrowerPassword: 'Test@1233333',        lenderEmail: 'harish@yopmail.com',
+        borrowerPassword: 'Test@1233333',
+        lenderEmail: 'harish@yopmail.com',
         lenderPassword: 'Test@1233333',
         loanAmountMin: 1000,
         loanAmountMax: 5000,
@@ -199,6 +195,137 @@ function App() {
       return 3;
     }
     return stage;
+  };
+
+  const getConsoleSteps = () => {
+    const hasStarted = isRunning || statusText !== 'Ready';
+    const isFinished = statusText === 'Passed' || statusText === 'Failed' || statusText === 'Completed' || statusText === 'Cancelled' || (!isRunning && currentRunId !== null && statusText !== 'Offline');
+    const isErr = statusText === 'Failed' || statusText === 'Error';
+    
+    // Check logs for setup phases
+    let hasSetupBrowser = false;
+    let hasStartPlaywright = false;
+    let hasEndPlaywright = false;
+    
+    const allLogs = [...logs, ...executionLogs];
+    for (const log of allLogs) {
+      const txt = log.text;
+      if (
+        txt.includes('Logging in borrower') ||
+        txt.includes('Borrower logging in') ||
+        txt.includes('Opening NFT detail page') ||
+        txt.includes('LENDER SESSION') ||
+        txt.includes('BORROWER SESSION')
+      ) {
+        hasSetupBrowser = true;
+      }
+      if (
+        txt.includes('Starting negotiation loop') ||
+        txt.includes('requesting loan') ||
+        txt.includes('FLOW 1') ||
+        txt.includes('FLOW 2') ||
+        txt.includes('FLOW 3') ||
+        txt.includes('FLOW 4') ||
+        txt.includes('Starting discovery loop') ||
+        txt.includes('Phase ')
+      ) {
+        hasStartPlaywright = true;
+      }
+      if (
+        txt.includes('test completed successfully') ||
+        txt.includes('completed successfully') ||
+        txt.includes('Phase 6 complete!') ||
+        txt.includes('repayment successful') ||
+        txt.includes('returned to Available assets') ||
+        txt.includes('cancelled successfully') ||
+        txt.includes('loan request failed after') ||
+        txt.includes('failed to lend after') ||
+        txt.includes('[Lender] Loan successfully accepted') ||
+        txt.includes('=== TEST COMPLETED')
+      ) {
+        hasEndPlaywright = true;
+      }
+    }
+    
+    // Step 1: Initialize Runner Environment
+    let step1: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (hasStarted) {
+      step1 = 'completed';
+    }
+    
+    // Step 2: Setup Browser Context
+    let step2: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (hasStarted) {
+      if (hasSetupBrowser) {
+        step2 = 'completed';
+      } else if (isErr && !hasSetupBrowser) {
+        step2 = 'failed';
+      } else {
+        step2 = 'running';
+      }
+    }
+    
+    // Step 3: Run selected Playwright test
+    let step3: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (hasSetupBrowser) {
+      if (hasEndPlaywright) {
+        step3 = 'completed';
+      } else if (isErr) {
+        step3 = 'failed';
+      } else {
+        step3 = 'running';
+      }
+    }
+    
+    // Step 4: Upload Playwright test results
+    let step4: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (hasEndPlaywright || (isErr && hasSetupBrowser)) {
+      if (isFinished) {
+        step4 = isErr ? 'failed' : 'completed';
+      } else {
+        step4 = 'running';
+      }
+    }
+    
+    // Step 5: Upload Playwright report
+    let step5: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (step4 === 'completed' || step4 === 'failed') {
+      if (isFinished) {
+        step5 = 'completed';
+      } else {
+        step5 = 'running';
+      }
+    }
+    
+    // Step 6: Upload UI config used for run
+    let step6: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (step5 === 'completed') {
+      if (isFinished) {
+        step6 = 'completed';
+      } else {
+        step6 = 'running';
+      }
+    }
+    
+    // Step 7: Post Set up Node.js
+    let step7: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+    if (step6 === 'completed') {
+      if (isFinished) {
+        step7 = 'completed';
+      } else {
+        step7 = 'running';
+      }
+    }
+    
+    return [
+      { id: 1, label: 'Initialize Runner Environment', status: step1, desc: 'Setting up runner workspace' },
+      { id: 2, label: 'Setup Browser Context', status: step2, desc: 'Launching chromium instances' },
+      { id: 3, label: 'Run selected Playwright test', status: step3, desc: 'Executing E2E scenario interactions' },
+      { id: 4, label: 'Upload Playwright test results', status: step4, desc: 'Saving JSON test report' },
+      { id: 5, label: 'Upload Playwright report', status: step5, desc: 'Uploading HTML reporter logs' },
+      { id: 6, label: 'Upload UI config used for run', status: step6, desc: 'Archiving scenario settings' },
+      { id: 7, label: 'Post Set up Node.js', status: step7, desc: 'Cleaning up active runner session' }
+    ];
   };
 
   const activeScenario = scenarios.find(s => s.id === activeTab) || scenarios[0];
@@ -581,43 +708,7 @@ function App() {
           </div>
         </header>
 
-        {/* Live Stage Tracker */}
-        {(isRunning || statusText !== 'Ready') && (
-          <div className="card live-tracker-card">
-            <h3 className="card-title" style={{ borderBottom: 'none', marginBottom: '10px' }}>
-              <Layers className="logo-icon animate-pulse" size={20} />
-              Live NFT Loan Status Tracker
-            </h3>
-            <div className="stepper-wrapper">
-              {[
-                { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
-                { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
-                { label: 'Lender Funded', desc: 'Lender accepted & funded' },
-                { label: 'Repaid & Released', desc: 'NFT returned to wallet' },
-              ].map((step, idx) => {
-                const activeStage = getActiveStage();
-                const isCompleted = idx <= activeStage;
-                const isActive = idx === activeStage + 1 && isRunning;
-                const isFailed = statusText === 'Failed' && idx === activeStage + 1;
 
-                return (
-                  <div key={idx} className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isFailed ? 'failed' : ''}`}>
-                    <div className="step-circle-wrapper">
-                      <div className="step-circle">
-                        {isCompleted ? '✓' : idx + 1}
-                      </div>
-                      {idx < 3 && <div className="step-line" />}
-                    </div>
-                    <div className="step-content">
-                      <div className="step-label">{step.label}</div>
-                      <div className="step-desc">{step.desc}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <div className="dashboard-grid">
           {/* Form Config Card */}
@@ -801,52 +892,128 @@ function App() {
                 Stop Execution
               </button>
             </div>
-          </div>
+          </div>          {/* Terminal Column containing status tracker and terminal console logs */}
+          <div className="terminal-column">
+            {/* Live Stage Tracker */}
+            {(isRunning || statusText !== 'Ready') && (
+              <div className="card live-tracker-card">
+                <h3 className="card-title" style={{ borderBottom: 'none', marginBottom: '10px' }}>
+                  <Layers className="logo-icon animate-pulse" size={20} />
+                  Live NFT Loan Status Tracker
+                </h3>
+                <div className="stepper-wrapper">
+                  {[
+                    { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+                    { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+                    { label: 'Lender Funded', desc: 'Lender accepted & funded' },
+                    { label: 'Repaid & Released', desc: 'NFT returned to wallet' },
+                  ].map((step, idx) => {
+                    const activeStage = getActiveStage();
+                    const isCompleted = idx <= activeStage;
+                    const isActive = idx === activeStage + 1 && isRunning;
+                    const isFailed = statusText === 'Failed' && idx === activeStage + 1;
 
-          {/* Terminal Card */}
-          <div className="terminal-container">
-            <div className="terminal-header">
-              <div className="terminal-dots">
-                <span className="terminal-dot dot-red"></span>
-                <span className="terminal-dot dot-yellow"></span>
-                <span className="terminal-dot dot-green"></span>
+                    return (
+                      <div key={idx} className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isFailed ? 'failed' : ''}`}>
+                        <div className="step-circle-wrapper">
+                          <div className="step-circle">
+                            {isCompleted ? '✓' : idx + 1}
+                          </div>
+                          {idx < 3 && <div className="step-line" />}
+                        </div>
+                        <div className="step-content">
+                          <div className="step-label">{step.label}</div>
+                          <div className="step-desc">{step.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="terminal-title">github-actions-runner.log</div>
-              <TerminalIcon size={14} className="text-muted" />
-            </div>
+            )}
 
-            <div className="terminal-body">
-              {logs.length === 0 && executionLogs.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  {isLocalRunner
-                    ? 'Console waiting for GitHub Actions dispatch through the local backend API.'
-                    : 'Console waiting for GitHub Actions dispatch. Status will update here.'}
+            {/* Terminal Card */}
+            <div className="terminal-container">
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="terminal-dot dot-red"></span>
+                  <span className="terminal-dot dot-yellow"></span>
+                  <span className="terminal-dot dot-green"></span>
                 </div>
-              ) : (
-                <>
-                  {logs.map((log, idx) => (
-                    <div key={`sys-${idx}`} className={`log-line log-${log.type}`}>
-                      {log.text}
+                <div className="terminal-title">github-actions-runner.log</div>
+                <TerminalIcon size={14} className="text-muted" />
+              </div>
+
+              <div className="terminal-layout-content">
+                {/* Vertical Console Steps Checklist */}
+                <div className="console-stepper-panel">
+                  <div className="stepper-header">
+                    <h4 className="stepper-title">
+                      <Server size={14} style={{ marginRight: '6px', color: 'var(--primary)' }} />
+                      Runner Steps
+                    </h4>
+                    <p className="stepper-subtitle">Live workflow checklist</p>
+                  </div>
+                  <div className="console-steps-list">
+                    {getConsoleSteps().map((step, idx) => {
+                      const { label, status, desc } = step;
+                      return (
+                        <div key={idx} className={`console-step-item step-${status}`}>
+                          <div className="console-step-circle-container">
+                            <div className="console-step-circle">
+                              {status === 'completed' && <Check size={12} strokeWidth={3} />}
+                              {status === 'failed' && <X size={12} strokeWidth={3} />}
+                              {status === 'running' && <Loader2 className="animate-spin" size={12} />}
+                              {status === 'pending' && <div className="pending-dot" />}
+                            </div>
+                            {idx < 6 && <div className={`console-step-line line-${status}`} />}
+                          </div>
+                          
+                          <div className="console-step-details">
+                            <span className="console-step-label">{label}</span>
+                            <span className="console-step-desc">{desc}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Console Terminal Logs */}
+                <div className="terminal-body">
+                  {logs.length === 0 && executionLogs.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      {isLocalRunner
+                        ? 'Console waiting for GitHub Actions dispatch through the local backend API.'
+                        : 'Console waiting for GitHub Actions dispatch. Status will update here.'}
+                    </div>
+                  ) : (
+                    <>
+                      {logs.map((log, idx) => (
+                        <div key={`sys-${idx}`} className={`log-line log-${log.type}`}>
+                          {log.text}
+                        </div>
+                      ))}
+                      {executionLogs.map((log, idx) => (
+                        <div key={`exec-${idx}`} className={`log-line log-${log.type}`}>
+                          {log.text}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {workflowUrl && (
+                    <div className="log-line log-system">
+                      Workflow: {workflowUrl}
+                    </div>
+                  )}
+                  {artifactLinks?.map(artifact => (
+                    <div key={artifact.id} className="log-line log-success">
+                      Artifact: {artifact.name} - {artifact.archiveDownloadUrl}
                     </div>
                   ))}
-                  {executionLogs.map((log, idx) => (
-                    <div key={`exec-${idx}`} className={`log-line log-${log.type}`}>
-                      {log.text}
-                    </div>
-                  ))}
-                </>
-              )}
-              {workflowUrl && (
-                <div className="log-line log-system">
-                  Workflow: {workflowUrl}
+                  <div ref={terminalEndRef} />
                 </div>
-              )}
-              {artifactLinks?.map(artifact => (
-                <div key={artifact.id} className="log-line log-success">
-                  Artifact: {artifact.name} - {artifact.archiveDownloadUrl}
-                </div>
-              ))}
-              <div ref={terminalEndRef} />
+              </div>
             </div>
           </div>
         </div>
