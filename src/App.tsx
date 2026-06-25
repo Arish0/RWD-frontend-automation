@@ -123,12 +123,21 @@ function App() {
         aprMax: 20,
         duration: 90,
         nftId: ''
+        borrowerPassword: 'Test@1233333',        lenderEmail: 'harish@yopmail.com',
+        lenderPassword: 'Test@1233333',
+        loanAmountMin: 1000,
+        loanAmountMax: 5000,
+        aprMin: 10,
+        aprMax: 20,
+        duration: 90,
+        nftId: ''
       }
     }
   ];
 
   const [activeTab, setActiveTab] = useState<string>('requestLoan');
   const [logs, setLogs] = useState<LogLine[]>([]);
+  const [executionLogs, setExecutionLogs] = useState<LogLine[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>('Ready');
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
@@ -201,6 +210,7 @@ function App() {
     localStorage.setItem('realworldApiBase', nextApiBase);
     setApiBase(nextApiBase);
     setLogs([]);
+    setExecutionLogs([]);
     setStatusText('Ready');
   };
 
@@ -262,6 +272,24 @@ function App() {
       return data.status || 'Running';
     };
 
+    const parseFullTextLogs = (fullText: string): LogLine[] => {
+      if (!fullText) return [];
+      const lines = fullText.split('\n');
+      return lines.map(line => {
+        let type: LogLine['type'] = 'normal';
+        if (line.includes('=== STARTING') || line.includes('=== TEST COMPLETED') || line.includes('Running command:')) {
+          type = 'system';
+        } else if (line.includes('[ERROR]') || line.includes('[SYSTEM ERROR]') || line.includes('failed') || line.includes('Error:')) {
+          type = 'error';
+        } else if (line.includes('successfully') || line.includes('SUCCESS') || line.includes('completed successfully') || line.includes('complete!')) {
+          type = 'success';
+        } else if (line.includes('Warning:') || line.includes('warn')) {
+          type = 'warning';
+        }
+        return { text: line, type };
+      });
+    };
+
     const pollStatus = async () => {
       try {
         const response = await fetch(`${apiBase}/test-status/${currentRunId}`);
@@ -290,10 +318,24 @@ function App() {
           ]);
         }
 
+        // Live logs polling
+        const logRunId = data.runId || currentRunId;
+        if (logRunId) {
+          try {
+            const logsResponse = await fetch(`${apiBase}/test-logs/${logRunId}`);
+            const logsData = await logsResponse.json();
+            if (logsResponse.ok && logsData.success) {
+              const parsed = parseFullTextLogs(logsData.fullText);
+              setExecutionLogs(parsed);
+            }
+          } catch (e) {
+            console.error('Failed to stream live logs:', e);
+          }
+        }
+
         if (data.status === 'completed' || data.status === 'cancelled') {
           setIsRunning(false);
 
-          const logRunId = data.runId || currentRunId;
           if (logRunId && fetchedLogsRef.current !== logRunId) {
             fetchedLogsRef.current = logRunId;
             try {
@@ -350,6 +392,7 @@ function App() {
     if (isRunning) return;
 
     setLogs([]);
+    setExecutionLogs([]);
     setIsRunning(true);
     setStatusText('Dispatching');
     setCurrentRunId(null);
@@ -773,18 +816,25 @@ function App() {
             </div>
 
             <div className="terminal-body">
-              {logs.length === 0 ? (
+              {logs.length === 0 && executionLogs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
                   {isLocalRunner
                     ? 'Console waiting for GitHub Actions dispatch through the local backend API.'
                     : 'Console waiting for GitHub Actions dispatch. Status will update here.'}
                 </div>
               ) : (
-                logs.map((log, idx) => (
-                  <div key={idx} className={`log-line log-${log.type}`}>
-                    {log.text}
-                  </div>
-                ))
+                <>
+                  {logs.map((log, idx) => (
+                    <div key={`sys-${idx}`} className={`log-line log-${log.type}`}>
+                      {log.text}
+                    </div>
+                  ))}
+                  {executionLogs.map((log, idx) => (
+                    <div key={`exec-${idx}`} className={`log-line log-${log.type}`}>
+                      {log.text}
+                    </div>
+                  ))}
+                </>
               )}
               {workflowUrl && (
                 <div className="log-line log-system">
