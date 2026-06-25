@@ -152,6 +152,46 @@ function App() {
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string>('');
   const fetchedLogsRef = useRef<string>('');
+  
+  const getActiveStage = () => {
+    let stage = 0;
+    for (const log of logs) {
+      const text = log.text;
+      if (
+        text.includes('repayment successful') || 
+        text.includes('returned to Available assets') || 
+        text.includes('Phase 6 complete!') || 
+        text.includes('test completed successfully') || 
+        text.includes('cancelled successfully') ||
+        text.includes('Cancellation requested') ||
+        text.includes('negotiation request cancelled successfully') ||
+        text.includes('loan request failed after') ||
+        text.includes('failed to lend after')
+      ) {
+        stage = 3;
+      } else if (stage < 2 && (
+        text.includes('accepted successfully') || 
+        text.includes('lending successful') || 
+        text.includes('loan accepted successfully') || 
+        text.includes('lending complete') ||
+        text.includes('Lend success')
+      )) {
+        stage = 2;
+      } else if (stage < 1 && (
+        text.includes('loan request created successfully') || 
+        text.includes('request was created successfully') || 
+        text.includes('loan request created') ||
+        text.includes('direct loan request')
+      )) {
+        stage = 1;
+      }
+    }
+    if (statusText === 'Passed') {
+      return 3;
+    }
+    return stage;
+  };
+
   const activeScenario = scenarios.find(s => s.id === activeTab) || scenarios[0];
   const isLocalRunner = apiBase === LOCAL_API_BASE;
 
@@ -497,6 +537,44 @@ function App() {
             </span>
           </div>
         </header>
+
+        {/* Live Stage Tracker */}
+        {(isRunning || statusText !== 'Ready') && (
+          <div className="card live-tracker-card">
+            <h3 className="card-title" style={{ borderBottom: 'none', marginBottom: '10px' }}>
+              <Layers className="logo-icon animate-pulse" size={20} />
+              Live NFT Loan Status Tracker
+            </h3>
+            <div className="stepper-wrapper">
+              {[
+                { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+                { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+                { label: 'Lender Funded', desc: 'Lender accepted & funded' },
+                { label: 'Repaid & Released', desc: 'NFT returned to wallet' },
+              ].map((step, idx) => {
+                const activeStage = getActiveStage();
+                const isCompleted = idx <= activeStage;
+                const isActive = idx === activeStage + 1 && isRunning;
+                const isFailed = statusText === 'Failed' && idx === activeStage + 1;
+
+                return (
+                  <div key={idx} className={`step-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''} ${isFailed ? 'failed' : ''}`}>
+                    <div className="step-circle-wrapper">
+                      <div className="step-circle">
+                        {isCompleted ? '✓' : idx + 1}
+                      </div>
+                      {idx < 3 && <div className="step-line" />}
+                    </div>
+                    <div className="step-content">
+                      <div className="step-label">{step.label}</div>
+                      <div className="step-desc">{step.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="dashboard-grid">
           {/* Form Config Card */}
