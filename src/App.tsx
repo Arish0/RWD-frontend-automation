@@ -54,6 +54,11 @@ interface TestRunStatus {
     archiveDownloadUrl: string;
   }>;
   message?: string;
+  steps?: Array<{
+    name: string;
+    status: string;
+    conclusion: string | null;
+  }>;
 }
 
 const LOCAL_API_BASE = 'http://localhost:3000';
@@ -134,6 +139,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<string>('requestLoan');
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [executionLogs, setExecutionLogs] = useState<LogLine[]>([]);
+  const [workflowSteps, setWorkflowSteps] = useState<Array<{ name: string, status: string, conclusion: string | null }>>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>('Ready');
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
@@ -160,7 +166,8 @@ function App() {
   
   const getActiveStage = () => {
     let stage = 0;
-    for (const log of logs) {
+    const allLogs = [...logs, ...executionLogs];
+    for (const log of allLogs) {
       const text = log.text;
       if (
         text.includes('repayment successful') || 
@@ -179,14 +186,17 @@ function App() {
         text.includes('lending successful') || 
         text.includes('loan accepted successfully') || 
         text.includes('lending complete') ||
-        text.includes('Lend success')
+        text.includes('Lend success') ||
+        text.includes('Successfully lent') ||
+        text.includes('Flow completed successfully')
       )) {
         stage = 2;
       } else if (stage < 1 && (
         text.includes('loan request created successfully') || 
         text.includes('request was created successfully') || 
         text.includes('loan request created') ||
-        text.includes('direct loan request')
+        text.includes('direct loan request') ||
+        text.includes('Captured Loan ID')
       )) {
         stage = 1;
       }
@@ -198,6 +208,53 @@ function App() {
   };
 
   const getConsoleSteps = () => {
+    if (workflowSteps && workflowSteps.length > 0) {
+      const filtered = workflowSteps.filter(s => 
+        s.name !== 'Mask dashboard secrets' && 
+        s.name !== 'Show selected test' &&
+        s.name !== 'Write UI config' &&
+        s.name !== 'Set up job' &&
+        s.name !== 'Complete job'
+      );
+      
+      return filtered.map((step, idx) => {
+        let status: 'pending' | 'running' | 'completed' | 'failed' = 'pending';
+        if (step.status === 'completed') {
+          if (step.conclusion === 'success') {
+            status = 'completed';
+          } else if (step.conclusion === 'failure' || step.conclusion === 'cancelled') {
+            status = 'failed';
+          } else {
+            status = 'pending';
+          }
+        } else if (step.status === 'in_progress') {
+          status = 'running';
+        } else if (step.status === 'queued') {
+          status = 'pending';
+        }
+        
+        const descMap: Record<string, string> = {
+          'Checkout repository': 'Checking out repository branch',
+          'Set up Node.js': 'Initializing Node environment',
+          'Install dependencies': 'Installing packages via npm ci',
+          'Install Playwright Chromium': 'Downloading chromium assets',
+          'Run selected Playwright test': 'Executing Playwright E2E automation',
+          'Upload Playwright test results': 'Archiving test results',
+          'Upload Playwright report': 'Uploading HTML report artifact',
+          'Upload UI config used for run': 'Saving test run configuration',
+          'Post Set up Node.js': 'Post execution cleanup Node',
+          'Post Checkout repository': 'Post execution cleanup Git'
+        };
+        
+        return {
+          id: idx + 1,
+          label: step.name,
+          status,
+          desc: descMap[step.name] || 'Running workflow step'
+        };
+      });
+    }
+
     const hasStarted = isRunning || statusText !== 'Ready';
     const isFinished = statusText === 'Passed' || statusText === 'Failed' || statusText === 'Completed' || statusText === 'Cancelled' || (!isRunning && currentRunId !== null && statusText !== 'Offline');
     const isErr = statusText === 'Failed' || statusText === 'Error';
@@ -322,7 +379,7 @@ function App() {
     return [
       { id: 1, label: 'Initialize Runner Environment', status: step1, desc: 'Setting up runner workspace' },
       { id: 2, label: 'Setup Browser Context', status: step2, desc: 'Launching chromium instances' },
-      { id: 3, label: 'Run selected Playwright test', status: step3, desc: 'Executing E2E scenario interactions' },
+      { id: 3, label: 'Run selected Playwright test', status: step3, desc: 'Executing E2E automation tests' },
       { id: 4, label: 'Upload Playwright test results', status: step4, desc: 'Saving JSON test report' },
       { id: 5, label: 'Upload Playwright report', status: step5, desc: 'Uploading HTML reporter logs' },
       { id: 6, label: 'Upload UI config used for run', status: step6, desc: 'Archiving scenario settings' },
@@ -431,9 +488,10 @@ function App() {
         if (cancelled) return;
 
         const displayStatus = formatStatus(data);
-        setStatusText(displayStatus);
-        if (data.htmlUrl) setWorkflowUrl(data.htmlUrl);
-        if (data.artifacts) setArtifactLinks(data.artifacts);
+         setStatusText(displayStatus);
+         if (data.htmlUrl) setWorkflowUrl(data.htmlUrl);
+         if (data.artifacts) setArtifactLinks(data.artifacts);
+         if (data.steps) setWorkflowSteps(data.steps);
 
         const statusKey = `${data.status}:${data.conclusion || ''}:${data.workflowRunId || data.runId || ''}`;
         if (lastStatusRef.current !== statusKey) {
@@ -520,9 +578,10 @@ function App() {
   const handleRunTest = async () => {
     if (isRunning) return;
 
-    setLogs([]);
-    setExecutionLogs([]);
-    setIsRunning(true);
+     setLogs([]);
+     setExecutionLogs([]);
+     setWorkflowSteps([]);
+     setIsRunning(true);
     setStatusText('Dispatching');
     setCurrentRunId(null);
     setWorkflowUrl(null);
