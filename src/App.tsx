@@ -12,7 +12,9 @@ import {
   RotateCcw,
   Check,
   X,
-  Loader2
+  Loader2,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 interface Scenario {
@@ -26,6 +28,8 @@ interface Scenario {
     borrowerPassword?: string;
     lenderEmail?: string;
     lenderPassword?: string;
+    lender2Email?: string;
+    lender2Password?: string;
     loanAmountMin?: number;
     loanAmountMax?: number;
     aprMin?: number;
@@ -133,6 +137,46 @@ function App() {
         duration: 90,
         nftId: ''
       }
+    },
+    {
+      id: 'refinance',
+      name: 'Refinance flow (7 Phases)',
+      flow: 'refinance',
+      description: 'Executes all 7 phases of loan refinancing (early repayment, any/original lender, interest paid configurations).',
+      icon: <ArrowRightLeft className="nav-item-icon" size={20} />,
+      defaultConfig: {
+        borrowerEmail: 'brooklyn@yopmail.com',
+        borrowerPassword: 'Test@1233333',
+        lenderEmail: 'harish@yopmail.com',
+        lenderPassword: 'Test@1233333',
+        loanAmountMin: 1000,
+        loanAmountMax: 5000,
+        aprMin: 10,
+        aprMax: 20,
+        duration: 90,
+        nftId: ''
+      }
+    },
+    {
+      id: 'e2etest',
+      name: 'E2E Refinance Flow',
+      flow: 'e2etest',
+      description: 'Runs E2E Refinance flow for a specific NFT, including interest payments and multi-lender refinance validation.',
+      icon: <ArrowRightLeft className="nav-item-icon" size={20} />,
+      defaultConfig: {
+        borrowerEmail: 'brooklyn@yopmail.com',
+        borrowerPassword: 'Test@1233333',
+        lenderEmail: 'harish@yopmail.com',
+        lenderPassword: 'Test@1233333',
+        lender2Email: 'testingsparkout0123@gmail.com',
+        lender2Password: 'V_sarumathi2002@',
+        loanAmountMin: 1000,
+        loanAmountMax: 5000,
+        aprMin: 10,
+        aprMax: 20,
+        duration: 90,
+        nftId: ''
+      }
     }
   ];
 
@@ -146,59 +190,159 @@ function App() {
   const [workflowUrl, setWorkflowUrl] = useState<string | null>(null);
   const [artifactLinks, setArtifactLinks] = useState<TestRunStatus['artifacts']>([]);
   const [apiBase, setApiBase] = useState<string>(() => localStorage.getItem('realworldApiBase') || DEFAULT_API_BASE);
+  const [nftIds, setNftIds] = useState<string[]>(['']);
   const [formData, setFormData] = useState<Record<string, any>>({
     borrowerEmail: 'brooklyn@yopmail.com',
     borrowerPassword: 'Test@1233333',
     lenderEmail: 'harish@yopmail.com',
     lenderPassword: 'Test@1233333',
+    lender2Email: 'testingsparkout0123@gmail.com',
+    lender2Password: 'V_sarumathi2002@',
     loanAmountMin: 1000,
     loanAmountMax: 5000,
     aprMin: 10,
     aprMax: 20,
     duration: 90,
     iterations: 10,
-    nftId: ''
+    nftId: '',
+    headed: false
   });
+
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      nftId: nftIds.filter(id => id.trim() !== '').join(',')
+    }));
+  }, [nftIds]);
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string>('');
   const fetchedLogsRef = useRef<string>('');
   
+  const getTrackerSteps = (flow: string) => {
+    switch (flow) {
+      case 'requestLoan':
+        return [
+          { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+          { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+          { label: 'Loan Updated', desc: 'Borrower altered the terms' },
+          { label: 'Loan Cancelled', desc: 'NFT returned to wallet' },
+        ];
+      case 'requestAndLend':
+        return [
+          { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+          { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+          { label: 'Lender Funded', desc: 'Lender funded the loan' },
+          { label: 'Loan Active', desc: 'Verify loan is active' },
+        ];
+      case 'counterRecounter':
+        return [
+          { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+          { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+          { label: 'Negotiation Loop', desc: 'Counter-offers exchanged' },
+          { label: 'Lender Funded', desc: 'Final terms accepted & active' },
+        ];
+      case 'refinance':
+        return [
+          { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+          { label: 'Active Loan Created', desc: 'NFT requested & funded' },
+          { label: 'Refinance Requested', desc: 'New terms proposed by borrower' },
+          { label: 'Refinance Accepted', desc: 'Refinance approved & active' },
+        ];
+      case 'repayment':
+      default:
+        return [
+          { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
+          { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
+          { label: 'Lender Funded', desc: 'Lender accepted & funded' },
+          { label: 'Repaid & Released', desc: 'NFT returned to wallet' },
+        ];
+    }
+  };
+
   const getActiveStage = () => {
     let stage = 0;
     const allLogs = [...logs, ...executionLogs];
+    const flow = activeScenario?.flow;
+
     for (const log of allLogs) {
       const text = log.text;
-      if (
-        text.includes('repayment successful') || 
-        text.includes('returned to Available assets') || 
-        text.includes('Phase 6 complete!') || 
-        text.includes('test completed successfully') || 
-        text.includes('cancelled successfully') ||
-        text.includes('Cancellation requested') ||
-        text.includes('negotiation request cancelled successfully') ||
-        text.includes('loan request failed after') ||
-        text.includes('failed to lend after')
-      ) {
-        stage = 3;
-      } else if (stage < 2 && (
-        text.includes('accepted successfully') || 
-        text.includes('lending successful') || 
-        text.includes('loan accepted successfully') || 
-        text.includes('lending complete') ||
-        text.includes('Lend success') ||
-        text.includes('Successfully lent') ||
-        text.includes('Flow completed successfully')
-      )) {
-        stage = 2;
-      } else if (stage < 1 && (
-        text.includes('loan request created successfully') || 
-        text.includes('request was created successfully') || 
-        text.includes('loan request created') ||
-        text.includes('direct loan request') ||
-        text.includes('Captured Loan ID')
-      )) {
-        stage = 1;
+      
+      if (flow === 'requestLoan') {
+        if (
+          text.includes('cancelled successfully') ||
+          text.includes('negotiation request cancelled successfully') ||
+          text.includes('Cancellation requested') ||
+          text.includes('test completed successfully')
+        ) {
+          stage = 3;
+        } else if (stage < 2 && (
+          text.includes('updateBorrowRequest') ||
+          text.includes('updateBorrowRequest.spec.ts') ||
+          text.includes('Terms updated') ||
+          text.includes('editBorrowRequest') ||
+          text.includes('Successfully updated')
+        )) {
+          stage = 2;
+        } else if (stage < 1 && (
+          text.includes('loan request created') ||
+          text.includes('Captured Loan ID') ||
+          text.includes('direct loan request')
+        )) {
+          stage = 1;
+        }
+      } else if (flow === 'refinance') {
+        if (
+          text.includes('Refinance flow completed successfully') ||
+          text.includes('TEST COMPLETED SUCCESSFULLY') ||
+          text.includes('test completed successfully')
+        ) {
+          stage = 3;
+        } else if (stage < 2 && (
+          text.includes('requesting refinance...') ||
+          text.includes('refinance request created successfully')
+        )) {
+          stage = 2;
+        } else if (stage < 1 && (
+          text.includes('accepted successfully') ||
+          text.includes('Lend success') ||
+          text.includes('lending successful') ||
+          text.includes('lending complete')
+        )) {
+          stage = 1;
+        }
+      } else {
+        if (
+          text.includes('repayment successful') || 
+          text.includes('returned to Available assets') || 
+          text.includes('Phase 6 complete!') || 
+          text.includes('test completed successfully') || 
+          text.includes('cancelled successfully') ||
+          text.includes('Cancellation requested') ||
+          text.includes('negotiation request cancelled successfully') ||
+          text.includes('loan request failed after') ||
+          text.includes('failed to lend after')
+        ) {
+          stage = 3;
+        } else if (stage < 2 && (
+          text.includes('accepted successfully') || 
+          text.includes('lending successful') || 
+          text.includes('loan accepted successfully') || 
+          text.includes('lending complete') ||
+          text.includes('Lend success') ||
+          text.includes('Successfully lent') ||
+          text.includes('Flow completed successfully')
+        )) {
+          stage = 2;
+        } else if (stage < 1 && (
+          text.includes('loan request created successfully') || 
+          text.includes('request was created successfully') || 
+          text.includes('loan request created') ||
+          text.includes('direct loan request') ||
+          text.includes('Captured Loan ID')
+        )) {
+          stage = 1;
+        }
       }
     }
     if (statusText === 'Passed') {
@@ -596,13 +740,16 @@ function App() {
       borrowerPassword: formData.borrowerPassword,
       lenderEmail: formData.lenderEmail,
       lenderPassword: formData.lenderPassword,
+      lender2Email: activeScenario.flow === 'e2etest' ? formData.lender2Email : undefined,
+      lender2Password: activeScenario.flow === 'e2etest' ? formData.lender2Password : undefined,
       loanAmountMin: Number(formData.loanAmountMin),
       loanAmountMax: Number(formData.loanAmountMax),
       aprMin: Number(formData.aprMin),
       aprMax: Number(formData.aprMax),
       duration: activeScenario.flow === 'counterRecounter' ? undefined : Number(formData.duration),
       iterations: activeScenario.flow === 'counterRecounter' ? Number(formData.iterations) : undefined,
-      nftId: activeScenario.flow === 'repayment' ? String(formData.nftId || '').trim() : undefined
+      nftId: (activeScenario.flow === 'repayment' || activeScenario.flow === 'refinance' || activeScenario.flow === 'e2etest') ? String(formData.nftId || '').trim() : undefined,
+      headed: Boolean(formData.headed)
     };
 
     try {
@@ -831,6 +978,34 @@ function App() {
               </>
             )}
 
+            {activeScenario.flow === 'e2etest' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Lender 2 Email (Testing Sparkout)</label>
+                  <input 
+                    className="form-input" 
+                    type="email" 
+                    name="lender2Email" 
+                    value={formData.lender2Email} 
+                    onChange={handleInputChange}
+                    disabled={isRunning}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Lender 2 Password</label>
+                  <input 
+                    className="form-input" 
+                    type="password" 
+                    name="lender2Password" 
+                    value={formData.lender2Password} 
+                    onChange={handleInputChange}
+                    disabled={isRunning}
+                  />
+                </div>
+              </>
+            )}
+
             {activeScenario.flow === 'counterRecounter' && (
               <div className="form-group">
                 <label className="form-label">Negotiation Iterations</label>
@@ -845,18 +1020,75 @@ function App() {
               </div>
             )}
 
-            {activeScenario.flow === 'repayment' && (
+            {(activeScenario.flow === 'repayment' || activeScenario.flow === 'refinance' || activeScenario.flow === 'e2etest') && (
               <div className="form-group">
-                <label className="form-label">NFT Contract / Token ID</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  name="nftId"
-                  placeholder="0x1c71388e4f5089926fF153F7635F81C4F1676fCb/6"
-                  value={formData.nftId}
-                  onChange={handleInputChange}
-                  disabled={isRunning}
-                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>NFT Contract / Token IDs</label>
+                  {nftIds.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setNftIds(prev => [...prev, ''])}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--primary-hover)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}
+                      title="Add more NFT ID"
+                      disabled={isRunning}
+                    >
+                      <Plus size={14} /> Add
+                    </button>
+                  )}
+                </div>
+                
+                {nftIds.map((id, index) => (
+                  <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="0x1c71388e4f5089926fF153F7635F81C4F1676fCb/6"
+                      value={id}
+                      onChange={(e) => {
+                        const newIds = [...nftIds];
+                        newIds[index] = e.target.value;
+                        setNftIds(newIds);
+                      }}
+                      disabled={isRunning}
+                      style={{ flex: 1 }}
+                    />
+                    {nftIds.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newIds = nftIds.filter((_, i) => i !== index);
+                          setNftIds(newIds);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '4px',
+                          borderRadius: '4px'
+                        }}
+                        title="Remove NFT ID"
+                        disabled={isRunning}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -925,6 +1157,25 @@ function App() {
                 </div>
               </>
             )}
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
+              <input 
+                type="checkbox" 
+                id="headed-checkbox"
+                name="headed" 
+                checked={formData.headed || false} 
+                onChange={(e) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    headed: e.target.checked
+                  }));
+                }}
+                disabled={isRunning}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <label htmlFor="headed-checkbox" className="form-label" style={{ marginBottom: 0, cursor: 'pointer', userSelect: 'none' }}>
+                Run Playwright in Headed Mode (via Xvfb)
+              </label>
+            </div>
 
             <div className="btn-container">
               <button 
@@ -963,12 +1214,7 @@ function App() {
                   Live NFT Loan Status Tracker
                 </h3>
                 <div className="stepper-wrapper">
-                  {[
-                    { label: 'Workflow Dispatched', desc: 'GitHub Actions triggered' },
-                    { label: 'Loan Requested', desc: 'NFT locked, terms submitted' },
-                    { label: 'Lender Funded', desc: 'Lender accepted & funded' },
-                    { label: 'Repaid & Released', desc: 'NFT returned to wallet' },
-                  ].map((step, idx) => {
+                  {getTrackerSteps(activeScenario.flow).map((step, idx) => {
                     const activeStage = getActiveStage();
                     const isCompleted = idx <= activeStage;
                     const isActive = idx === activeStage + 1 && isRunning;
