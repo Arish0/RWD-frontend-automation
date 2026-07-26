@@ -235,6 +235,13 @@ export default function TestPage() {
     };
   }, [apiBase]);
 
+  // Auto-scroll terminal to bottom when logs update
+  useEffect(() => {
+    if (terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, executionLogs]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -246,7 +253,11 @@ export default function TestPage() {
   const handleRunTest = async () => {
     if (isRunning || !testConfig) return;
 
-    setLogs([]);
+    setLogs([
+      { text: `[SYSTEM] === STARTING TEST: ${testConfig.name} ===\n`, type: 'system' },
+      { text: `[SYSTEM] Flow: ${testConfig.flow}\n`, type: 'system' },
+      { text: `[SYSTEM] Connecting to ${apiBase}...\n`, type: 'system' },
+    ]);
     setExecutionLogs([]);
     setWorkflowSteps([]);
     setIsRunning(true);
@@ -716,9 +727,22 @@ export default function TestPage() {
                 className="btn btn-primary"
                 onClick={handleRunTest}
                 disabled={isRunning}
+                style={{
+                  opacity: isRunning ? 0.7 : 1,
+                  cursor: isRunning ? 'not-allowed' : 'pointer',
+                }}
               >
-                <Play size={16} />
-                Run Test
+                {isRunning ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play size={16} />
+                    Run Test
+                  </>
+                )}
               </button>
 
               <button
