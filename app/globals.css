@@ -149,20 +149,20 @@ body {
 /* Grid Layout */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 360px 650px;
   gap: 30px;
   align-items: start;
   width: 100%;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1300px) {
   .dashboard-grid {
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 340px 600px;
     gap: 20px;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
