@@ -727,20 +727,16 @@ export default function TestPage() {
                 className="btn btn-primary"
                 onClick={handleRunTest}
                 disabled={isRunning}
-                style={{
-                  opacity: isRunning ? 0.7 : 1,
-                  cursor: isRunning ? 'not-allowed' : 'pointer',
-                }}
               >
                 {isRunning ? (
                   <>
-                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                    Running...
+                    <Loader2 size={16} />
+                    {' Running...'}
                   </>
                 ) : (
                   <>
                     <Play size={16} />
-                    Run Test
+                    {' Run Test'}
                   </>
                 )}
               </button>
